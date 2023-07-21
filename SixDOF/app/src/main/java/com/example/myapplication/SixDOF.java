@@ -26,18 +26,23 @@ import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 
-public class SixDOF extends AppCompatActivity implements SensorEventListener {
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
+import okio.ByteString;
+import android.media.ExifInterface;
+
+public class SixDOF extends AppCompatActivity implements SensorEventListener{
     SensorManager mSensorManager=null;
     Sensor mAccelerometer;
     Sensor mGyroscope;
-
-
 
     protected void onResume() {
         super.onResume();
         mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManager.registerListener(this, mGyroscope, SensorManager.SENSOR_DELAY_NORMAL);
-
         net_connect();
     }
 
@@ -48,24 +53,86 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener {
         net_close();
     }
     String[] data= {"hello", "world"};
-    public void onSensorChanged(SensorEvent sensorEvent) {
-        String sensorName = sensorEvent.sensor.getName();
-//        String txt=sensorName + ": X: " + sensorEvent.values[0] + "; Y: " + sensorEvent.values[1] + "; Z: " + sensorEvent.values[2] + ";";
 
-        float x=sensorEvent.values[0];
-        float y=sensorEvent.values[1];
-        float z=sensorEvent.values[2];
+    private long lastTimestamp = 0;
+    private float[] rotationMatrix = new float[9];
+    private float[] orientationAngles = new float[3];
+    private float[] translation = {0, 0, 0};
 
-        if(sensorName.contains("Gyroscope")) {
-            data[0]="Gyro: " + ": X: " + String.format("%.4f", x)  + "; Y: " +String.format("%.4f", y)+ "; Z: " + String.format("%.4f", z);
-        }else{
-            data[1]="Acc: " + ": X: " + String.format("%.4f", x)  + "; Y: " + String.format("%.4f", y)+ "; Z: " + String.format("%.4f", z);
+    // Complementary filter alpha value (adjust as needed for filtering)
+    private static final float ALPHA = 0.1f;
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor == mAccelerometer) {
+            // Get the accelerometer values and update the rotation matrix
+            System.arraycopy(event.values, 0, orientationAngles, 0, 3);
+        } else if (event.sensor == mGyroscope) {
+            if (lastTimestamp != 0) {
+                // Calculate the rotation angles using gyroscope data
+                float dt = (event.timestamp - lastTimestamp) * 1.0e-9f; // Convert timestamp to seconds
+                float axisX = event.values[0];
+                float axisY = event.values[1];
+                float axisZ = event.values[2];
+
+                float omegaMagnitude = (float) Math.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ);
+                if (omegaMagnitude > 1e-5) {
+                    axisX /= omegaMagnitude;
+                    axisY /= omegaMagnitude;
+                    axisZ /= omegaMagnitude;
+                }
+
+                float thetaOverTwo = omegaMagnitude * dt / 2.0f;
+                float sinThetaOverTwo = (float) Math.sin(thetaOverTwo);
+                float cosThetaOverTwo = (float) Math.cos(thetaOverTwo);
+                float deltaRotationX = sinThetaOverTwo * axisX;
+                float deltaRotationY = sinThetaOverTwo * axisY;
+                float deltaRotationZ = sinThetaOverTwo * axisZ;
+                float deltaRotationW = cosThetaOverTwo;
+
+                float[] deltaRotationMatrix = new float[9];
+                deltaRotationMatrix[0] = 1 - 2 * deltaRotationY * deltaRotationY - 2 * deltaRotationZ * deltaRotationZ;
+                deltaRotationMatrix[1] = 2 * deltaRotationX * deltaRotationY - 2 * deltaRotationW * deltaRotationZ;
+                deltaRotationMatrix[2] = 2 * deltaRotationX * deltaRotationZ + 2 * deltaRotationW * deltaRotationY;
+                deltaRotationMatrix[3] = 2 * deltaRotationX * deltaRotationY + 2 * deltaRotationW * deltaRotationZ;
+                deltaRotationMatrix[4] = 1 - 2 * deltaRotationX * deltaRotationX - 2 * deltaRotationZ * deltaRotationZ;
+                deltaRotationMatrix[5] = 2 * deltaRotationY * deltaRotationZ - 2 * deltaRotationW * deltaRotationX;
+                deltaRotationMatrix[6] = 2 * deltaRotationX * deltaRotationZ - 2 * deltaRotationW * deltaRotationY;
+                deltaRotationMatrix[7] = 2 * deltaRotationY * deltaRotationZ + 2 * deltaRotationW * deltaRotationX;
+                deltaRotationMatrix[8] = 1 - 2 * deltaRotationX * deltaRotationX - 2 * deltaRotationY * deltaRotationY;
+
+                // Update the rotation matrix using a complementary filter
+                for (int i = 0; i < 9; i++) {
+                    rotationMatrix[i] = ALPHA * deltaRotationMatrix[i] + (1 - ALPHA) * rotationMatrix[i];
+                }
+
+                // Update the translation using the rotation matrix and accelerometer data
+                float x = rotationMatrix[0] * orientationAngles[0] + rotationMatrix[1] * orientationAngles[1] + rotationMatrix[2] * orientationAngles[2];
+                float y = rotationMatrix[3] * orientationAngles[0] + rotationMatrix[4] * orientationAngles[1] + rotationMatrix[5] * orientationAngles[2];
+                float z = rotationMatrix[6] * orientationAngles[0] + rotationMatrix[7] * orientationAngles[1] + rotationMatrix[8] * orientationAngles[2];
+
+                // Update the translation values
+                translation[0] += x * dt;
+                translation[1] += y * dt;
+                translation[2] += z * dt;
+
+//                float x=translation[0], y=translation[1], z=translation[2];
+                data[0]="X: " + String.format("%.2f", x)  + "; Y: " +String.format("%.2f", y)+ "; Z: " + String.format("%.2f", z);
+                String txt=data[0]+"\n"+data[1];
+                show_txt(txt);
+                if(cbg.isChecked()){
+                    doSend("xy="+x+","+y);
+                }
+            }
+//            float x=translation[0], y=translation[1], z=translation[2];
+//            data[1]="X: " + String.format("%.4f", x)  + "; Y: " +String.format("%.4f", y)+ "; Z: " + String.format("%.4f", z);
+//            String txt=data[0]+"\n"+data[1];
+//            show_txt(txt);
+
+            lastTimestamp = event.timestamp;
         }
-
-        String txt=data[0]+"\n"+data[1];
-        Log.d(TAG, txt);
-        show_txt(txt);
     }
+
+
+
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {
@@ -86,8 +153,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener {
 
     Button bxp, bxm, byp, bym;
 
-    CheckBox cb;
-
+    CheckBox cb, cbg;
 
 
     @Override
@@ -111,14 +177,13 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener {
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mGyroscope = mSensorManager.getDefaultSensor(TYPE_GYROSCOPE);
 
-//        mGyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_POSE_6DOF);
-
         bxp=(Button) findViewById(R.id.button8);
         bxm=(Button) findViewById(R.id.button9);
         byp=(Button) findViewById(R.id.button6);
         bym=(Button) findViewById(R.id.button7);
 
         cb = (CheckBox) findViewById(R.id.checkBox);
+        cbg=(CheckBox) findViewById(R.id.checkBox3);
 
         View.OnTouchListener touchListener = new View.OnTouchListener() {
             @Override
@@ -137,12 +202,16 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener {
         byp.setOnTouchListener(touchListener);
         bym.setOnTouchListener(touchListener);
     }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
 
-
+    }
 
     public void net_connect(){
         new Thread(){
             public void run(){
+                Log.i(TAG, "connecting ="+serverIP);
                 try{
                     client=new Socket(serverIP, 8080);
                     writer=new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
@@ -190,9 +259,16 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener {
         doSend("down");
     }
     public void clicked_open(View v){
+        if(!cb.isChecked()){
+            Toast.makeText(SixDOF.this, "click enable ctrl", Toast.LENGTH_SHORT).show();
+        }
+
         doSend("open");
     }
     public void clicked_close(View v){
+        if(!cb.isChecked()){
+            Toast.makeText(SixDOF.this, "click enable ctrl", Toast.LENGTH_SHORT).show();
+        }
         doSend("close");
     }
 
@@ -222,6 +298,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener {
         new Thread(){
             public void run(){
                 try{
+//                    Log.i(TAG, "sending="+msg);
                     writer.println(msg);
                     writer.flush();
                 }catch (Exception ex){

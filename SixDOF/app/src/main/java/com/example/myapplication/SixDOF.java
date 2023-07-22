@@ -10,7 +10,9 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.OrientationEventListener;
@@ -27,6 +29,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 
+import mywebsocket.WebSocketServerSingle;
+import mywebsocket.WebsocketInterface;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.WebSocket;
@@ -34,24 +38,13 @@ import okhttp3.WebSocketListener;
 import okio.ByteString;
 import android.media.ExifInterface;
 
+import org.json.JSONObject;
+
 public class SixDOF extends AppCompatActivity implements SensorEventListener{
     SensorManager mSensorManager=null;
     Sensor mAccelerometer;
     Sensor mGyroscope;
 
-    protected void onResume() {
-        super.onResume();
-        mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        mSensorManager.registerListener(this, mGyroscope, SensorManager.SENSOR_DELAY_NORMAL);
-        net_connect();
-    }
-
-    protected void onPause() {
-        super.onPause();
-        mSensorManager.unregisterListener(this);
-
-        net_close();
-    }
     String[] data= {"hello", "world"};
 
     private long lastTimestamp = 0;
@@ -119,7 +112,18 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
                 String txt=data[0]+"\n"+data[1];
                 show_txt(txt);
                 if(cbg.isChecked()){
-                    doSend("xy="+x+","+y);
+//                    doSend("xy="+x+","+y);
+                    String resp="xy="+x+","+y;
+                    try {
+                        JSONObject jsr = new JSONObject();
+                        jsr.put("type", "gyro");
+                        jsr.put("x", x);
+                        jsr.put("y", y);
+                        resp=jsr.toString();
+                    }catch(Exception e) {
+                    }
+                    sendJSON(resp);
+
                 }
             }
 //            float x=translation[0], y=translation[1], z=translation[2];
@@ -142,19 +146,24 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
     public static String TAG=SixDOF.class.getSimpleName();
 
+    String connection_mode=null;  //server or client
     String serverIP=null;
-    TextView tv=null;
-    boolean isconnected=false;
+    String localIP=null;
 
-    Socket client;
-    PrintWriter writer;
+    TextView tv=null;
+
+
 
     TextView display;
+    TextView tv_ip;
 
     Button bxp, bxm, byp, bym;
 
     CheckBox cb, cbg;
 
+    SocketClient socketClient;
+    WebSocketServerSingle ws;
+    private final int PORT=8080;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -163,15 +172,23 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         if(getSupportActionBar()!=null){
             getSupportActionBar().hide();
         }
+        connection_mode=getIntent().getStringExtra("mode");
         serverIP=getIntent().getStringExtra("serverIP");
 //        Toast.makeText(this, "connecting ...\n"+serverIP, Toast.LENGTH_SHORT).show();
 
+
         tv=(TextView) findViewById(R.id.textView);
         display=(TextView) findViewById(R.id.textView2);
+        tv_ip=(TextView) findViewById(R.id.textView3);
 
+        localIP=getIP();
+        tv_ip.setText("local ip="+localIP+":"+PORT);
 
-//        net_connect();
-
+        if(connection_mode.equals("client")) {
+            socketClient = new SocketClient(serverIP, PORT);
+        }else{
+            createServer();
+        }
 
         mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -201,43 +218,66 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         bxm.setOnTouchListener(touchListener);
         byp.setOnTouchListener(touchListener);
         bym.setOnTouchListener(touchListener);
-    }
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
+
 
     }
-
-    public void net_connect(){
-        new Thread(){
-            public void run(){
-                Log.i(TAG, "connecting ="+serverIP);
-                try{
-                    client=new Socket(serverIP, 8080);
-                    writer=new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
-                    isconnected=true;
-                }catch (Exception ex){
-                    ex.printStackTrace();
-                    isconnected=false;
+    private void createServer(){
+        try {
+            new Thread() {
+                public void run() {
+                    try {
+                        System.out.println("Local IP="+localIP);
+                        ws = new WebSocketServerSingle(new websocketlistener(), PORT);
+                        ws.start();
+                        System.out.println("websocket started");
+                    }catch(Exception e) {
+                        show_connection_status(false);
+                        e.printStackTrace();
+                    }
                 }
-//                Toast.makeText(SixDOF.this, "connecting status="+isconnected, Toast.LENGTH_SHORT).show();
-                show_connection_status();
-            }
-        }.start();
-    }
-    public void net_close(){
-        try{
-            client.close();
-        }catch (Exception ex){
-
+            }.start();
+        }catch(Exception ex) {
+            ex.printStackTrace();
         }
     }
 
-    public void show_connection_status(){
+    private String getIP(){
+        Context context = this.getApplicationContext();
+        WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+        String ip = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
+        return ip;
+    }
+
+
+    protected void onResume() {
+        super.onResume();
+        mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManager.registerListener(this, mGyroscope, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    protected void onPause() {
+        super.onPause();
+        mSensorManager.unregisterListener(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if(socketClient!=null){
+            socketClient.close();
+        }
+        if(ws!=null){
+            ws.close();
+        }
+        super.onDestroy();
+    }
+
+
+
+    public void show_connection_status(boolean status){
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                tv.setText("connection:"+isconnected);
+                tv.setText("connection="+status);
             }
         });
     }
@@ -287,30 +327,124 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
     public void doSend(final String msg){
 
+        String resp=msg;
+        try {
+            JSONObject jsr = new JSONObject();
+            jsr.put("type", "click");
+            jsr.put("data",msg);
+            resp=jsr.toString();
+        }catch(Exception e) {
+        }
+
+        sendJSON(resp);
+    }
+
+    public void sendJSON(final String jsonmsg){
+
         if(!cb.isChecked()){
             return;
         }
 
-        if(!isconnected){
-            return;
-        }
+        if(connection_mode.equals("client") && socketClient != null) {
+            socketClient.send(jsonmsg);
+        }else if(connection_mode.equals("server") && ws!=null) {
+            Log.i(TAG, "sending msg ="+jsonmsg);
 
-        new Thread(){
-            public void run(){
-                try{
-//                    Log.i(TAG, "sending="+msg);
-                    writer.println(msg);
-                    writer.flush();
-                }catch (Exception ex){
-                    isconnected=false;
-                    show_connection_status();
-                    ex.printStackTrace();
+            new Thread() {
+                public void run() {
+                    try {
+                        ws.send_msg(jsonmsg);
+                    }catch (Exception ex){
+                        show_connection_status(false);
+                    }
                 }
-            }
-        }.start();
-
+            }.start();
+        }else {
+            Log.i(TAG, "sending failed. __not connected__");
+        }
     }
 
 
+    class SocketClient{
+        Socket client;
+        PrintWriter writer;
+        boolean isconnected=false;
+        public SocketClient(String serverIP, int PORT){
+            new Thread(){
+                public void run(){
+                    Log.i(TAG, "connecting ="+serverIP);
+                    try{
+                        client=new Socket(serverIP, PORT);
+                        writer=new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
+                        isconnected=true;
+                    }catch (Exception ex){
+                        ex.printStackTrace();
+                        isconnected=false;
+                    }
+//                Toast.makeText(SixDOF.this, "connecting status="+isconnected, Toast.LENGTH_SHORT).show();
+                    show_connection_status(isconnected);
+                }
+            }.start();
+        }
+        public void send(String msg){
+            if(!isconnected){
+                return;
+            }
+
+            new Thread(){
+                public void run(){
+                    try{
+//                    Log.i(TAG, "sending="+msg);
+                        writer.println(msg);
+                        writer.flush();
+                    }catch (Exception ex){
+                        isconnected=false;
+                        show_connection_status(isconnected);
+                        ex.printStackTrace();
+                    }
+                }
+            }.start();
+        }
+
+        public void close(){
+            try{
+                client.close();
+            }catch (Exception ex){
+
+            }
+        }
+
+
+    }
+
+    class websocketlistener implements WebsocketInterface {
+        @Override
+        public void onopen(String remote) {
+            System.out.println("onopen=" + remote);
+            show_connection_status(true);
+        }
+
+
+        @Override
+        public void onmessage(String msg) {
+            System.out.println("onmessage=" + msg);
+            if(msg.startsWith("echo=")){
+               try{
+                   msg=msg.replace("echo=","from server=");
+                    boolean s=ws.send_msg(msg);
+                    System.out.println("sent="+s);
+                }catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+
+        }
+
+        @Override
+        public void onclose() {
+            System.out.println("connection closed");
+            show_connection_status(false);
+        }
+    }
 
 }

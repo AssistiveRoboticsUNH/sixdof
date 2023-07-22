@@ -55,9 +55,21 @@ public class home extends AppCompatActivity {
         saveFromEditText(serverIP);
         Intent intent=new Intent(home.this, SixDOF.class);
         intent.putExtra("serverIP", serverIP);
+        intent.putExtra("mode", "client");
         startActivity(intent);
 
     }
 
+    public void button_server_clicked(View v){
+        Intent intent=new Intent(home.this, SixDOF.class);
+        intent.putExtra("serverIP", "127.0.0.1");
+        intent.putExtra("mode", "server");
+        startActivity(intent);
+    }
+
+    public void button_voice_clicked(View v){
+        Intent intent=new Intent(home.this, VoiceCommand.class);
+        startActivity(intent);
+    }
 
 }

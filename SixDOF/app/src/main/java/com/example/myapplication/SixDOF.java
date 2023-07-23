@@ -119,6 +119,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
                         jsr.put("type", "gyro");
                         jsr.put("x", x);
                         jsr.put("y", y);
+                        jsr.put("test", button_test_touched);
                         resp=jsr.toString();
                     }catch(Exception e) {
                     }
@@ -158,12 +159,16 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
     TextView tv_ip;
 
     Button bxp, bxm, byp, bym;
+    Button bup, bdown;
+    Button test;
 
     CheckBox cb, cbg;
 
     SocketClient socketClient;
     WebSocketServerSingle ws;
     private final int PORT=8080;
+
+    boolean button_test_touched=false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -194,10 +199,15 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mGyroscope = mSensorManager.getDefaultSensor(TYPE_GYROSCOPE);
 
+        bup=(Button) findViewById(R.id.button2);
+        bdown=(Button) findViewById(R.id.button3);
+
         bxp=(Button) findViewById(R.id.button8);
         bxm=(Button) findViewById(R.id.button9);
         byp=(Button) findViewById(R.id.button6);
         bym=(Button) findViewById(R.id.button7);
+        test=(Button) findViewById(R.id.button14);
+
 
         cb = (CheckBox) findViewById(R.id.checkBox);
         cbg=(CheckBox) findViewById(R.id.checkBox3);
@@ -205,22 +215,37 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         View.OnTouchListener touchListener = new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
-
                 Button b=(Button)view;
                 String name=b.getText().toString();
-                doSend(name);
+
+                if (motionEvent.getAction()==MotionEvent.ACTION_DOWN) {
+                    if(name.toLowerCase().equals("test")) {
+                        button_test_touched=true;
+                    }
+                }else if(motionEvent.getAction()==MotionEvent.ACTION_UP) {
+                    if(name.toLowerCase().equals("test")) {
+                        button_test_touched=false;
+                    }
+                }
+
+                if(!name.toLowerCase().equals("test")) {
+                    doSend(name);
+                }
 
                 return false;
             }
         };
 
+        bup.setOnTouchListener(touchListener);
+        bdown.setOnTouchListener(touchListener);
         bxp.setOnTouchListener(touchListener);
         bxm.setOnTouchListener(touchListener);
         byp.setOnTouchListener(touchListener);
         bym.setOnTouchListener(touchListener);
-
+        test.setOnTouchListener(touchListener);
 
     }
+
     private void createServer(){
         try {
             new Thread() {
@@ -293,24 +318,19 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
 
     public void clicked_up(View v){
-        doSend("up");
+//        doSend("up");
     }
     public void clicked_down(View v){
-        doSend("down");
+//        doSend("down");
     }
-    public void clicked_open(View v){
+    public void clicked_gripper(View v){
         if(!cb.isChecked()){
             Toast.makeText(SixDOF.this, "click enable ctrl", Toast.LENGTH_SHORT).show();
         }
 
-        doSend("open");
+        doSend("gripper");
     }
-    public void clicked_close(View v){
-        if(!cb.isChecked()){
-            Toast.makeText(SixDOF.this, "click enable ctrl", Toast.LENGTH_SHORT).show();
-        }
-        doSend("close");
-    }
+
 
     public void clicked_xplus(View v){
 //        doSend("x+");
@@ -330,7 +350,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         String resp=msg;
         try {
             JSONObject jsr = new JSONObject();
-            jsr.put("type", "click");
+            jsr.put("type", "button");
             jsr.put("data",msg);
             resp=jsr.toString();
         }catch(Exception e) {

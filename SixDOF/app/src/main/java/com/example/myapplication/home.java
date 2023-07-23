@@ -71,5 +71,8 @@ public class home extends AppCompatActivity {
         Intent intent=new Intent(home.this, VoiceCommand.class);
         startActivity(intent);
     }
-
+    public void button_6dof_clicked(View v){
+        Intent intent=new Intent(home.this, SFusion.class);
+        startActivity(intent);
+    }
 }

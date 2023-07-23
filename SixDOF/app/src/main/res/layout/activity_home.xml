@@ -8,16 +8,15 @@
 
     <Button
         android:id="@+id/button"
-        android:layout_width="133dp"
-        android:layout_height="60dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:layout_marginEnd="65dp"
-        android:layout_marginBottom="20dp"
         android:onClick="button_connect_clicked"
         android:text="Connect With A Server"
-        app:layout_constraintBottom_toTopOf="@+id/editTextText2"
+        app:layout_constraintBottom_toBottomOf="@+id/editTextText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/editTextText"
-        app:layout_constraintTop_toBottomOf="@+id/editTextText5" />
+        app:layout_constraintTop_toTopOf="@+id/editTextText" />
 
     <EditText
         android:id="@+id/editTextText"
@@ -25,24 +24,25 @@
         android:layout_height="0dp"
         android:layout_marginStart="69dp"
         android:layout_marginEnd="27dp"
+        android:layout_marginBottom="21dp"
         android:ems="10"
         android:inputType="text"
         android:text="192.168.0.10"
-        app:layout_constraintBottom_toBottomOf="@+id/button"
+        app:layout_constraintBottom_toTopOf="@+id/editTextText2"
         app:layout_constraintEnd_toStartOf="@+id/button"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/button"
+        app:layout_constraintTop_toBottomOf="@+id/editTextText5"
         tools:text="192.168.0.10" />
 
     <TextView
         android:id="@+id/textView4"
-        android:layout_width="197dp"
+        android:layout_width="199dp"
         android:layout_height="0dp"
-        android:layout_marginTop="88dp"
-        android:layout_marginBottom="11dp"
+        android:layout_marginTop="49dp"
+        android:layout_marginBottom="13dp"
         android:text="6DOF Teleoperation"
         android:textSize="22dp"
-        app:layout_constraintBottom_toTopOf="@+id/editTextText5"
+        app:layout_constraintBottom_toTopOf="@+id/button4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -58,12 +58,12 @@
         app:layout_constraintBottom_toTopOf="@+id/button10"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/button" />
+        app:layout_constraintTop_toBottomOf="@+id/editTextText" />
 
     <Button
         android:id="@+id/button10"
         android:layout_width="163dp"
-        android:layout_height="64dp"
+        android:layout_height="0dp"
         android:layout_marginBottom="8dp"
         android:onClick="button_server_clicked"
         android:text="Run as A Websocket Server"
@@ -78,7 +78,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="1dp"
         android:layout_marginEnd="1dp"
-        android:layout_marginBottom="29dp"
+        android:layout_marginBottom="28dp"
         android:clickable="false"
         android:ems="10"
         android:inputType="text"
@@ -90,7 +90,7 @@
     <Button
         android:id="@+id/button11"
         android:layout_width="169dp"
-        android:layout_height="57dp"
+        android:layout_height="0dp"
         android:layout_marginBottom="175dp"
         android:onClick="button_voice_clicked"
         android:text="Voice Command Server"
@@ -109,9 +109,28 @@
         android:clickable="false"
         android:ems="10"
         android:inputType="text"
-        app:layout_constraintBottom_toTopOf="@+id/button"
+        app:layout_constraintBottom_toTopOf="@+id/editTextText"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button4" />
+
+    <Button
+        android:id="@+id/button4"
+        android:layout_width="117dp"
+        android:layout_height="0dp"
+        android:onClick="button_6dof_clicked"
+        android:text="6DOF"
+        app:layout_constraintBottom_toTopOf="@+id/editTextText5"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView4" />
+
+    <TextView
+        android:id="@+id/textView9"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CARL"
+        tools:layout_editor_absoluteX="227dp"
+        tools:layout_editor_absoluteY="606dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

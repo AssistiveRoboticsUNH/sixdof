@@ -19,6 +19,7 @@ import android.view.OrientationEventListener;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -51,6 +52,8 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
     private float[] rotationMatrix = new float[9];
     private float[] orientationAngles = new float[3];
     private float[] translation = {0, 0, 0};
+
+    int send_freq=50;
 
     // Complementary filter alpha value (adjust as needed for filtering)
     private static final float ALPHA = 0.1f;
@@ -170,6 +173,9 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
     boolean button_test_touched=false;
 
+    long last_send_ms=System.currentTimeMillis();
+
+    long cnt=0;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -212,24 +218,42 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         cb = (CheckBox) findViewById(R.id.checkBox);
         cbg=(CheckBox) findViewById(R.id.checkBox3);
 
+
+        cb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+
+               @Override
+               public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
+                    doSend("enabled", cb.isChecked());
+               }
+           }
+        );
+
+
         View.OnTouchListener touchListener = new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 Button b=(Button)view;
                 String name=b.getText().toString();
+//                cnt++;
+//                Log.i(TAG, "ontouch="+name+" "+cnt+" "+motionEvent.getAction());
 
+                boolean pressed=true; //down and move
                 if (motionEvent.getAction()==MotionEvent.ACTION_DOWN) {
                     if(name.toLowerCase().equals("test")) {
                         button_test_touched=true;
                     }
+//                    doSend(name, true);
+                    pressed=true;
                 }else if(motionEvent.getAction()==MotionEvent.ACTION_UP) {
                     if(name.toLowerCase().equals("test")) {
                         button_test_touched=false;
                     }
+//                    doSend(name, false);
+                    pressed=false;
                 }
 
                 if(!name.toLowerCase().equals("test")) {
-                    doSend(name);
+                    doSend(name, pressed);
                 }
 
                 return false;
@@ -245,6 +269,8 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         test.setOnTouchListener(touchListener);
 
     }
+
+
 
     private void createServer(){
         try {
@@ -323,12 +349,14 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
     public void clicked_down(View v){
 //        doSend("down");
     }
+
+
     public void clicked_gripper(View v){
         if(!cb.isChecked()){
             Toast.makeText(SixDOF.this, "click enable ctrl", Toast.LENGTH_SHORT).show();
         }
 
-        doSend("gripper");
+        doSend("gripper", false);
     }
 
 
@@ -345,23 +373,44 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 //        doSend("y-");
     }
 
-    public void doSend(final String msg){
+    String last_msg="";
+    public void doSend(final String msg, boolean pressed){
+
+
+
 
         String resp=msg;
         try {
             JSONObject jsr = new JSONObject();
             jsr.put("type", "button");
             jsr.put("data",msg);
+            jsr.put("pressed", pressed);
             resp=jsr.toString();
         }catch(Exception e) {
         }
 
+        if(resp.equals(last_msg)) {
+            long current_time_ms = System.currentTimeMillis();
+            long dt = current_time_ms - last_send_ms;
+            int delay = 1000 / send_freq;
+            if (dt < delay) {
+                //to fast
+                return;
+            }
+        }
+
         sendJSON(resp);
+        last_msg=resp;
     }
 
     public void sendJSON(final String jsonmsg){
 
-        if(!cb.isChecked()){
+
+
+
+        if(jsonmsg.contains("enabled")){
+            //send
+        }else if(!cb.isChecked()){
             return;
         }
 
@@ -374,6 +423,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
                 public void run() {
                     try {
                         ws.send_msg(jsonmsg);
+                        last_send_ms = System.currentTimeMillis();
                     }catch (Exception ex){
                         show_connection_status(false);
                     }

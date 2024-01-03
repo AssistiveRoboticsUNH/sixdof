@@ -103,7 +103,8 @@ public class home extends AppCompatActivity {
         startActivity(intent);
     }
     public void button_6dof_clicked(View v){
-        Intent intent=new Intent(home.this, SFusion.class);
+//        Intent intent=new Intent(home.this, SFusion.class);
+        Intent intent=new Intent(home.this, SixDOFSpinner.class);
         startActivity(intent);
     }
 }

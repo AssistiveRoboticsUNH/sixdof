@@ -130,7 +130,7 @@
         android:id="@+id/textView9"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text=" CARL v2.4"
+        android:text=" CARL v2.5"
         tools:layout_editor_absoluteX="227dp"
         tools:layout_editor_absoluteY="606dp" />
 

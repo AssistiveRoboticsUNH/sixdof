@@ -16,7 +16,9 @@ import android.widget.Toast;
 public class home extends AppCompatActivity {
 
     EditText et;
+    EditText etf;
     String KEY="serverIP";
+    String KEY_F="FQ";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,10 +32,17 @@ public class home extends AppCompatActivity {
         }
 
         et=(EditText) findViewById(R.id.editTextText);
+        etf= (EditText) findViewById(R.id.editTextNumber);
 
         et.setText(getValue());
+        etf.setText(""+getFq());
     }
+    private int getFq() {
+        SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
+        int savedValue = sharedPref.getInt(KEY_F, 100);
 
+        return savedValue;
+    }
     private String getValue() {
         SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
         String savedValue = sharedPref.getString(KEY, "192.168.0.10"); //the 2 argument return default value
@@ -47,24 +56,46 @@ public class home extends AppCompatActivity {
         editor.putString(KEY, text);
         editor.apply();
     }
+    private void saveFqFromEditText(int fq) {
+        SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPref.edit();
+        editor.putInt(KEY_F, fq);
+        editor.apply();
+    }
     public void button_connect_clicked(View v){
         String serverIP=et.getText().toString();
+        int fq=Integer.parseInt(etf.getText().toString());
+        Toast.makeText(this, "fq="+fq, Toast.LENGTH_LONG).show();
 
 //        Toast.makeText(this, "connecting ...\n"+serverIP, Toast.LENGTH_SHORT).show();
 
         saveFromEditText(serverIP);
+        saveFqFromEditText(fq);
+
         Intent intent=new Intent(home.this, SixDOF.class);
         intent.putExtra("serverIP", serverIP);
+        intent.putExtra("fq", fq);
         intent.putExtra("mode", "client");
         startActivity(intent);
 
     }
 
     public void button_server_clicked(View v){
+        String serverIP=et.getText().toString();
+        int fq=Integer.parseInt(etf.getText().toString());
+//        Toast.makeText(this, "fq="+fq, Toast.LENGTH_LONG).show();
+        saveFromEditText(serverIP);
+        saveFqFromEditText(fq);
+
         Intent intent=new Intent(home.this, SixDOF.class);
-        intent.putExtra("serverIP", "127.0.0.1");
+        intent.putExtra("serverIP", serverIP);
+        intent.putExtra("fq", fq);
         intent.putExtra("mode", "server");
         startActivity(intent);
+//        Intent intent=new Intent(home.this, SixDOF.class);
+//        intent.putExtra("serverIP", "127.0.0.1");
+//        intent.putExtra("mode", "server");
+//        startActivity(intent);
     }
 
     public void button_voice_clicked(View v){

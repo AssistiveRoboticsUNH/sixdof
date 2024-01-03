@@ -55,6 +55,10 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
     int send_freq=50;
 
+    float sensor_x=0, sensor_y=0;
+    String button_name="";
+    boolean button_pressed=false;
+
     // Complementary filter alpha value (adjust as needed for filtering)
     private static final float ALPHA = 0.1f;
     public void onSensorChanged(SensorEvent event) {
@@ -112,8 +116,16 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
 //                float x=translation[0], y=translation[1], z=translation[2];
                 data[0]="X: " + String.format("%.2f", x)  + "; Y: " +String.format("%.2f", y)+ "; Z: " + String.format("%.2f", z);
+                if(wh!=null){
+                    data[1]="f="+wh.sending_f;
+                }
+
                 String txt=data[0]+"\n"+data[1];
                 show_txt(txt);
+
+                sensor_x=y;
+                sensor_y=x;
+
                 if(cbg.isChecked()){
 //                    doSend("xy="+x+","+y);
                     String resp="xy="+x+","+y;
@@ -161,9 +173,9 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
     TextView display;
     TextView tv_ip;
 
-    Button bxp, bxm, byp, bym;
+    Button bxp, bxm, byp, bym, bgripper;
     Button bup, bdown;
-    Button test;
+    Button T1,T2;
 
     CheckBox cb, cbg;
 
@@ -175,7 +187,13 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
     long last_send_ms=System.currentTimeMillis();
 
+    WebsocketHandler wh=null;
+    long event_no=0;
+
     long cnt=0;
+
+    int setting_fq=100;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -185,6 +203,12 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         }
         connection_mode=getIntent().getStringExtra("mode");
         serverIP=getIntent().getStringExtra("serverIP");
+        setting_fq=getIntent().getIntExtra("fq", 100);
+        if(setting_fq<1){
+            setting_fq=1;
+        }
+        System.out.println("received setting_fq="+setting_fq);
+
 //        Toast.makeText(this, "connecting ...\n"+serverIP, Toast.LENGTH_SHORT).show();
 
 
@@ -212,7 +236,9 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         bxm=(Button) findViewById(R.id.button9);
         byp=(Button) findViewById(R.id.button6);
         bym=(Button) findViewById(R.id.button7);
-        test=(Button) findViewById(R.id.button14);
+        T1=(Button) findViewById(R.id.button14);
+        T2=(Button) findViewById(R.id.button15);
+        bgripper=(Button) findViewById(R.id.button5);
 
 
         cb = (CheckBox) findViewById(R.id.checkBox);
@@ -223,7 +249,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
                @Override
                public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
-                    doSend("enabled", cb.isChecked());
+                   buttonSend("enabled", cb.isChecked());
                }
            }
         );
@@ -234,27 +260,42 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 Button b=(Button)view;
                 String name=b.getText().toString();
+
+                ++event_no;
+                button_name=name;
+
 //                cnt++;
 //                Log.i(TAG, "ontouch="+name+" "+cnt+" "+motionEvent.getAction());
 
                 boolean pressed=true; //down and move
                 if (motionEvent.getAction()==MotionEvent.ACTION_DOWN) {
-                    if(name.toLowerCase().equals("test")) {
-                        button_test_touched=true;
-                    }
-//                    doSend(name, true);
-                    pressed=true;
+//                    if(name.toLowerCase().equals("test")) {
+//                        button_test_touched=true;
+//                    }
+////                    doSend(name, true);
+//                    pressed=true;
+
+                    button_pressed=true;
                 }else if(motionEvent.getAction()==MotionEvent.ACTION_UP) {
-                    if(name.toLowerCase().equals("test")) {
-                        button_test_touched=false;
-                    }
-//                    doSend(name, false);
-                    pressed=false;
+                    button_pressed=false;
+
+//                    if(name.toLowerCase().equals("test")) {
+//                        button_test_touched=false;
+//                    }
+//                    buttonSend(name, false);
+//                    pressed=false;
+//                    return false;
                 }
 
-                if(!name.toLowerCase().equals("test")) {
-                    doSend(name, pressed);
+                //set button event to DataSender
+                if(wh!=null){
+                    wh.button_event(event_no, button_name, button_pressed);
                 }
+
+
+//                if(!name.toLowerCase().equals("test")) {
+//                    buttonSend(name, pressed);
+//                }
 
                 return false;
             }
@@ -266,10 +307,11 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         bxm.setOnTouchListener(touchListener);
         byp.setOnTouchListener(touchListener);
         bym.setOnTouchListener(touchListener);
-        test.setOnTouchListener(touchListener);
+        T1.setOnTouchListener(touchListener);
+        T2.setOnTouchListener(touchListener);
+        bgripper.setOnTouchListener(touchListener);
 
     }
-
 
 
     private void createServer(){
@@ -278,7 +320,10 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
                 public void run() {
                     try {
                         System.out.println("Local IP="+localIP);
-                        ws = new WebSocketServerSingle(new websocketlistener(), PORT);
+                        wh=new WebsocketHandler();
+                        ws = new WebSocketServerSingle(wh, PORT);
+                        wh.setLeader(ws);
+                        wh.start();
                         ws.start();
                         System.out.println("websocket started");
                     }catch(Exception e) {
@@ -319,6 +364,10 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         if(ws!=null){
             ws.close();
         }
+        if(wh!=null){
+            wh.close();
+        }
+
         super.onDestroy();
     }
 
@@ -343,38 +392,11 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
     }
 
 
-    public void clicked_up(View v){
-//        doSend("up");
-    }
-    public void clicked_down(View v){
-//        doSend("down");
-    }
 
 
-    public void clicked_gripper(View v){
-        if(!cb.isChecked()){
-            Toast.makeText(SixDOF.this, "click enable ctrl", Toast.LENGTH_SHORT).show();
-        }
-
-        doSend("gripper", false);
-    }
-
-
-    public void clicked_xplus(View v){
-//        doSend("x+");
-    }
-    public void clicked_xminus(View v){
-//        doSend("x-");
-    }
-    public void clicked_yplus(View v){
-//        doSend("y+");
-    }
-    public void clicked_yminus(View v){
-//        doSend("y-");
-    }
 
     String last_msg="";
-    public void doSend(final String msg, boolean pressed){
+    public void buttonSend(final String msg, boolean pressed){
 
 
 
@@ -393,10 +415,10 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
             long current_time_ms = System.currentTimeMillis();
             long dt = current_time_ms - last_send_ms;
             int delay = 1000 / send_freq;
-            if (dt < delay) {
-                //to fast
-                return;
-            }
+//            if (dt < delay) {
+//                //to fast
+//                return;
+//            }
         }
 
         sendJSON(resp);
@@ -417,23 +439,24 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
         if(connection_mode.equals("client") && socketClient != null) {
             socketClient.send(jsonmsg);
         }else if(connection_mode.equals("server") && ws!=null) {
-            Log.i(TAG, "sending msg ="+jsonmsg);
+            Log.i(TAG, "[Disabled] sending msg ="+jsonmsg);
 
-            new Thread() {
-                public void run() {
-                    try {
-                        ws.send_msg(jsonmsg);
-                        last_send_ms = System.currentTimeMillis();
-                    }catch (Exception ex){
-                        show_connection_status(false);
-                    }
-                }
-            }.start();
+//            new Thread() {
+//                public void run() {
+//                    try {
+//                        ws.send_msg(jsonmsg);
+//                        last_send_ms = System.currentTimeMillis();
+//                    }catch (Exception ex){
+//                        show_connection_status(false);
+//                    }
+//                }
+//            }.start();
         }else {
             Log.i(TAG, "sending failed. __not connected__");
         }
     }
 
+    //TODO: send data a fixed rate and also make sure gripper data publish even button changed before sending
 
     class SocketClient{
         Socket client;
@@ -487,7 +510,27 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
 
     }
 
-    class websocketlistener implements WebsocketInterface {
+    class WebsocketHandler extends Thread implements WebsocketInterface {
+
+        long last_processed_event_no=0;  //update after sending event_no
+        long event_no;
+        String button;
+        boolean is_pressed;
+
+        int sending_f=1;
+
+        WebSocketServerSingle leader;
+        boolean isalive=false;
+        public void setLeader(WebSocketServerSingle leader){
+            this.leader=leader;
+        }
+
+        public void button_event(long event_no, String button, boolean is_pressed){
+            this.event_no=event_no;
+            this.button=button;
+            this.is_pressed=is_pressed;
+        }
+
         @Override
         public void onopen(String remote) {
             System.out.println("onopen=" + remote);
@@ -508,6 +551,59 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
                 }
             }
 
+        }
+
+
+        public void run(){
+            isalive=true;
+            //send data at a fixed rate
+            long ct=0;
+
+            while(leader.isAlive() && isalive){
+                long st=System.currentTimeMillis();
+                try{
+                    int sleeptime = (int) ( 1000 / (float) setting_fq );
+//                    System.out.println("sleeptime="+sleeptime +" fq="+setting_fq);
+                    Thread.sleep(sleeptime);
+                }catch (Exception ex){}
+                ++ct;
+
+
+                JSONObject jsr = new JSONObject();
+                try {
+                    jsr.put("id", ct);
+                    jsr.put("type", "common");
+                    jsr.put("button", this.button);
+                    jsr.put("pressed", this.is_pressed);
+                    jsr.put("x", sensor_x);
+                    jsr.put("y", sensor_y);
+                    jsr.put("enable_ctrl", cb.isChecked());
+                    jsr.put("enable_gyro", cbg.isChecked());
+                    jsr.put("f", sending_f);
+                }catch (Exception ex){
+
+                }
+
+                String resp=jsr.toString();
+
+                try {
+                    ws.send_msg(resp);
+                    last_send_ms = System.currentTimeMillis();
+                }catch (Exception ex){
+                    show_connection_status(false);
+                }
+                long dt=System.currentTimeMillis() -st;
+                sending_f= (int) ( 1000.0f /(float)dt );
+
+
+
+//                System.out.println("wh is alive "+ct);
+
+            }
+
+        }
+        public  void close(){
+            isalive=false;
         }
 
         @Override

@@ -66,6 +66,7 @@ public class WebSocketServerSingle extends Thread {
         }catch (Exception ex){
 
         }
+        islive=false;
     }
 
     public boolean isConnected() {

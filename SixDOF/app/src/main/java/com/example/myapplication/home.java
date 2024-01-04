@@ -15,7 +15,7 @@ import android.widget.Toast;
 
 public class home extends AppCompatActivity {
 
-    EditText et;
+
     EditText etf;
     String KEY="serverIP";
     String KEY_F="FQ";
@@ -31,10 +31,9 @@ public class home extends AppCompatActivity {
             getSupportActionBar().hide();
         }
 
-        et=(EditText) findViewById(R.id.editTextText);
+
         etf= (EditText) findViewById(R.id.editTextNumber);
 
-        et.setText(getValue());
         etf.setText(""+getFq());
     }
     private int getFq() {
@@ -63,25 +62,19 @@ public class home extends AppCompatActivity {
         editor.apply();
     }
     public void button_connect_clicked(View v){
-        String serverIP=et.getText().toString();
+
         int fq=Integer.parseInt(etf.getText().toString());
-        Toast.makeText(this, "fq="+fq, Toast.LENGTH_LONG).show();
-
-//        Toast.makeText(this, "connecting ...\n"+serverIP, Toast.LENGTH_SHORT).show();
-
-        saveFromEditText(serverIP);
         saveFqFromEditText(fq);
 
-        Intent intent=new Intent(home.this, SixDOF.class);
-        intent.putExtra("serverIP", serverIP);
+        Intent intent=new Intent(home.this, SixDOFSpinner.class);
         intent.putExtra("fq", fq);
-        intent.putExtra("mode", "client");
         startActivity(intent);
 
     }
 
     public void button_server_clicked(View v){
-        String serverIP=et.getText().toString();
+//        String serverIP=et.getText().toString();
+        String serverIP="";
         int fq=Integer.parseInt(etf.getText().toString());
 //        Toast.makeText(this, "fq="+fq, Toast.LENGTH_LONG).show();
         saveFromEditText(serverIP);
@@ -92,10 +85,6 @@ public class home extends AppCompatActivity {
         intent.putExtra("fq", fq);
         intent.putExtra("mode", "server");
         startActivity(intent);
-//        Intent intent=new Intent(home.this, SixDOF.class);
-//        intent.putExtra("serverIP", "127.0.0.1");
-//        intent.putExtra("mode", "server");
-//        startActivity(intent);
     }
 
     public void button_voice_clicked(View v){

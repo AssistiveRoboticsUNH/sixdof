@@ -3,6 +3,9 @@ package com.example.myapplication;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.annotation.SuppressLint;
+import android.content.ComponentName;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Bundle;
 
 import static android.hardware.Sensor.TYPE_GYROSCOPE;
@@ -17,6 +20,11 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Message;
+import android.os.Messenger;
+import android.os.RemoteException;
 import android.text.format.Formatter;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -44,8 +52,12 @@ import okhttp3.WebSocket;
 import okhttp3.WebSocketListener;
 import okio.ByteString;
 import android.media.ExifInterface;
+import android.widget.ToggleButton;
 
 import org.json.JSONObject;
+import org.zeromq.SocketType;
+import org.zeromq.ZContext;
+import org.zeromq.ZMQ;
 
 public class SixDOFSpinner extends AppCompatActivity implements SensorEventListener{
     SensorManager mSensorManager=null;
@@ -122,13 +134,8 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
                 translation[1] += y * dt;
                 translation[2] += z * dt;
 
-//                float x=translation[0], y=translation[1], z=translation[2];
                 data[0]="X: " + String.format("%.2f", x)  + "; Y: " +String.format("%.2f", y)+ "; Z: " + String.format("%.2f", z);
-                if(wh!=null){
-                    data[1]="f="+wh.sending_f;
-
-                    data[1] += String.format(" , x %03d :y %03d",spinner_x,spinner_y);
-                }
+                data[1] = String.format(" , x %03d :y %03d",spinner_x,spinner_y);
 
                 String txt=data[0]+"\n"+data[1];
                 show_txt(txt);
@@ -136,26 +143,7 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
                 sensor_x=y;
                 sensor_y=x;
 
-                if(cbg.isChecked()){
-//                    doSend("xy="+x+","+y);
-                    String resp="xy="+x+","+y;
-                    try {
-                        JSONObject jsr = new JSONObject();
-                        jsr.put("type", "gyro");
-                        jsr.put("x", x);
-                        jsr.put("y", y);
-                        jsr.put("test", button_test_touched);
-                        resp=jsr.toString();
-                    }catch(Exception e) {
-                    }
-                    sendJSON(resp);
-
-                }
             }
-//            float x=translation[0], y=translation[1], z=translation[2];
-//            data[1]="X: " + String.format("%.4f", x)  + "; Y: " +String.format("%.4f", y)+ "; Z: " + String.format("%.4f", z);
-//            String txt=data[0]+"\n"+data[1];
-//            show_txt(txt);
 
             lastTimestamp = event.timestamp;
         }
@@ -176,33 +164,24 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
     String serverIP=null;
     String localIP=null;
 
-    TextView tv=null;
-
-
-
     TextView display;
     TextView tv_ip;
 
     Button  bgripper;
     Button bup, bdown;
     Button T1,T2;
+    ToggleButton toggleButton;
 
+    boolean gripper_status=false;
     CheckBox cb, cbg;
 
-    SocketClient socketClient;
-    WebSocketServerSingle ws;
-    private final int PORT=8080;
-
-    boolean button_test_touched=false;
-
-    long last_send_ms=System.currentTimeMillis();
-
-    WebsocketHandler wh=null;
     long event_no=0;
 
     long cnt=0;
 
     int setting_fq=100;
+    ZMQ_Publisher zmq_publisher;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -214,39 +193,34 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
         connection_mode=getIntent().getStringExtra("mode");
         serverIP=getIntent().getStringExtra("serverIP");
         setting_fq=getIntent().getIntExtra("fq", 100);
-        if(setting_fq<1){
-            setting_fq=1;
+        if(setting_fq<10){
+            setting_fq=10;
         }
         System.out.println("received setting_fq="+setting_fq);
 
-//        Toast.makeText(this, "connecting ...\n"+serverIP, Toast.LENGTH_SHORT).show();
 
 
-        tv=(TextView) findViewById(R.id.textView);
         display=(TextView) findViewById(R.id.textView2);
         tv_ip=(TextView) findViewById(R.id.textView3);
 
         localIP=getIP();
-        tv_ip.setText("local ip="+localIP+":"+PORT);
+        tv_ip.setText("local ip="+localIP);
 
         connection_mode="server";
-        if(connection_mode.equals("client")) {
-            socketClient = new SocketClient(serverIP, PORT);
-        }else{
-            createServer();
-        }
+
 
         mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mGyroscope = mSensorManager.getDefaultSensor(TYPE_GYROSCOPE);
 
-        bup=(Button) findViewById(R.id.button2);
-        bdown=(Button) findViewById(R.id.button3);
+//        bup=(Button) findViewById(R.id.button2);
+//        bdown=(Button) findViewById(R.id.button3);
 
 
         T1=(Button) findViewById(R.id.button14);
         T2=(Button) findViewById(R.id.button15);
         bgripper=(Button) findViewById(R.id.button5);
+        toggleButton=(ToggleButton) findViewById(R.id.toggleButton);
 
 
         cb = (CheckBox) findViewById(R.id.checkBox);
@@ -254,14 +228,21 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
 
         cb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-
+                  @Override
+                  public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
+                      String msg=generateMsg();
+                      sayHello(msg);
+                  }
+              }
+        );
+        cbg.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
                                           @Override
                                           public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
-                                              buttonSend("enabled", cb.isChecked());
+                                              String msg=generateMsg();
+                                              sayHello(msg);
                                           }
                                       }
         );
-
 
         View.OnTouchListener touchListener = new View.OnTouchListener() {
             @Override
@@ -277,44 +258,33 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
                 boolean pressed=true; //down and move
                 if (motionEvent.getAction()==MotionEvent.ACTION_DOWN) {
-//                    if(name.toLowerCase().equals("test")) {
-//                        button_test_touched=true;
-//                    }
-////                    doSend(name, true);
-//                    pressed=true;
-
                     button_pressed=true;
                 }else if(motionEvent.getAction()==MotionEvent.ACTION_UP) {
                     button_pressed=false;
-
-//                    if(name.toLowerCase().equals("test")) {
-//                        button_test_touched=false;
-//                    }
-//                    buttonSend(name, false);
-//                    pressed=false;
-//                    return false;
                 }
 
-                //set button event to DataSender
-                if(wh!=null){
-                    wh.button_event(event_no, button_name, button_pressed);
+                if(motionEvent.getAction()==MotionEvent.ACTION_DOWN || motionEvent.getAction()==MotionEvent.ACTION_UP) {
+                    SixDOFSpinner.this.is_pressed = motionEvent.getAction()==MotionEvent.ACTION_DOWN;
+                    SixDOFSpinner.this.button = name;
+                    String msg=generateMsg();
+                    sayHello(msg);
                 }
-
-
-//                if(!name.toLowerCase().equals("test")) {
-//                    buttonSend(name, pressed);
-//                }
-
                 return false;
             }
         };
 
-        bup.setOnTouchListener(touchListener);
-        bdown.setOnTouchListener(touchListener);
+//        bup.setOnTouchListener(touchListener);
+//        bdown.setOnTouchListener(touchListener);
         T1.setOnTouchListener(touchListener);
         T2.setOnTouchListener(touchListener);
-        bgripper.setOnTouchListener(touchListener);
+//        bgripper.setOnTouchListener(touchListener);
 
+//        bgripper.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View view) {
+//                gripper_status=!gripper_status;
+//            }
+//        });
 
 
         final JoystickView jv= (JoystickView) findViewById(R.id.joyv);
@@ -324,50 +294,88 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
             public void onMove(int angle, int strength) {
                 int x=jv.getNormalizedX();
                 int y=jv.getNormalizedY();
-//                String.format("x%03d:y%03d",x,y)
-
                 spinner_angle=angle;
                 spinner_strength=strength;
                 spinner_x=jv.getNormalizedX();
                 spinner_y=jv.getNormalizedY();;
 
+                String msg=generateMsg();
+                sayHello(msg);
+            }
+        });
+
+
+
+        jv.setOnTouchListener(new View.OnTouchListener() {
+
+            long jv_down, jv_up;
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+
+                if (view instanceof Button) {
+                    Toast.makeText(SixDOFSpinner.this, "spinner button onTouch", Toast.LENGTH_SHORT).show();
+                }
+
+                if (motionEvent.getAction()==MotionEvent.ACTION_DOWN) {
+                    jv_down=System.currentTimeMillis();
+//                    Toast.makeText(SixDOFSpinner.this, "spinner onTouch", Toast.LENGTH_SHORT).show();
+                    long d=jv_down-jv_up;
+                    if(d<200){
+//                        Toast.makeText(SixDOFSpinner.this, "soft click", Toast.LENGTH_SHORT).show();
+                        SixDOFSpinner.this.is_pressed =true;
+                        SixDOFSpinner.this.button = "gripper";
+
+                        gripper_status = !gripper_status;
+                    }
+                }else if(motionEvent.getAction()==MotionEvent.ACTION_UP){
+                    jv_up=System.currentTimeMillis();
+                }
+
+                return false;
             }
         });
 
 
 
 
+        new Thread(){
+            public void run(){
+                zmq_publisher=new ZMQ_Publisher(setting_fq);
+                zmq_publisher.start();
+            }
+        }.start();
+
     }
 
-
-    private void createServer(){
-        try {
-            new Thread() {
-                public void run() {
-                    try {
-                        System.out.println("Local IP="+localIP);
-                        wh=new WebsocketHandler();
-                        ws = new WebSocketServerSingle(wh, PORT);
-                        wh.setLeader(ws);
-                        wh.start();
-                        ws.start();
-                        System.out.println("websocket started");
-                    }catch(Exception e) {
-                        show_connection_status(false);
-                        e.printStackTrace();
-                    }
-                }
-            }.start();
-        }catch(Exception ex) {
-            ex.printStackTrace();
-        }
-    }
 
     private String getIP(){
         Context context = this.getApplicationContext();
         WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         String ip = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
         return ip;
+    }
+
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        try {
+            zmq_publisher.close();
+        }catch (Exception ex){
+
+        }
+    }
+
+
+    public void sayHello(String txt) {
+
+//        String response = txt;
+//        socket.send(response.getBytes(ZMQ.CHARSET), 0);
     }
 
 
@@ -384,28 +392,8 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
     @Override
     protected void onDestroy() {
-        if(socketClient!=null){
-            socketClient.close();
-        }
-        if(ws!=null){
-            ws.close();
-        }
-        if(wh!=null){
-            wh.close();
-        }
 
         super.onDestroy();
-    }
-
-
-
-    public void show_connection_status(boolean status){
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                tv.setText("connection="+status);
-            }
-        });
     }
 
     public void show_txt(final String txt){
@@ -419,228 +407,68 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
 
 
-
-
-    String last_msg="";
-    public void buttonSend(final String msg, boolean pressed){
-
-
-
-
-        String resp=msg;
+    String button="";
+    boolean is_pressed;
+    public String generateMsg(){
+        JSONObject jsr = new JSONObject();
         try {
-            JSONObject jsr = new JSONObject();
-            jsr.put("type", "button");
-            jsr.put("data",msg);
-            jsr.put("pressed", pressed);
-            resp=jsr.toString();
-        }catch(Exception e) {
-        }
+            jsr.put("button", this.button);
+            jsr.put("pressed", this.is_pressed);
+            jsr.put("x", sensor_x);
+            jsr.put("y", sensor_y);
+            jsr.put("enable_ctrl", cb.isChecked());
+            jsr.put("enable_gyro", cbg.isChecked());
+//            jsr.put("f", sending_f);
+            jsr.put("spinner_angle", spinner_angle);
+            jsr.put("spinner_strength", spinner_strength);
+            jsr.put("spinner_x", 50-spinner_x);
+            jsr.put("spinner_y", 50-spinner_y);
+            jsr.put("gripper", gripper_status);
+            jsr.put("rec",toggleButton.getText().toString());
+        }catch (Exception ex){
 
-        if(resp.equals(last_msg)) {
-            long current_time_ms = System.currentTimeMillis();
-            long dt = current_time_ms - last_send_ms;
-            int delay = 1000 / send_freq;
-//            if (dt < delay) {
-//                //to fast
-//                return;
-//            }
         }
+        String toret=this.button+","+this.is_pressed+","+sensor_x+","+sensor_y+","+cb.isChecked()
+                +","+cbg.isChecked()+","+spinner_angle+","+spinner_strength+","+(50-spinner_x)
+                +","+(50-spinner_y);
+//        return toret;
 
-        sendJSON(resp);
-        last_msg=resp;
+        return jsr.toString();
     }
 
-    public void sendJSON(final String jsonmsg){
 
+    class ZMQ_Publisher extends  Thread{
 
+        int fq=10;
+        boolean is_alive=false;
+        private ZContext context;
+        private ZMQ.Socket socket;
+        public ZMQ_Publisher(int fq){
+            this.fq=fq;
 
-
-        if(jsonmsg.contains("enabled")){
-            //send
-        }else if(!cb.isChecked()){
-            return;
+            context = new ZContext();
+            socket = context.createSocket(SocketType.PUB);
+            socket.bind("tcp://*:5555");
         }
 
-        if(connection_mode.equals("client") && socketClient != null) {
-            socketClient.send(jsonmsg);
-        }else if(connection_mode.equals("server") && ws!=null) {
-            Log.i(TAG, "[Disabled] sending msg ="+jsonmsg);
+        public void run(){
+            is_alive=true;
+            while (is_alive){
+                String response = generateMsg();
+                socket.send(response.getBytes(ZMQ.CHARSET), 0);
 
-//            new Thread() {
-//                public void run() {
-//                    try {
-//                        ws.send_msg(jsonmsg);
-//                        last_send_ms = System.currentTimeMillis();
-//                    }catch (Exception ex){
-//                        show_connection_status(false);
-//                    }
-//                }
-//            }.start();
-        }else {
-            Log.i(TAG, "sending failed. __not connected__");
-        }
-    }
-
-    //TODO: send data a fixed rate and also make sure gripper data publish even button changed before sending
-
-    class SocketClient{
-        Socket client;
-        PrintWriter writer;
-        boolean isconnected=false;
-        public SocketClient(String serverIP, int PORT){
-            new Thread(){
-                public void run(){
-                    Log.i(TAG, "connecting ="+serverIP);
-                    try{
-                        client=new Socket(serverIP, PORT);
-                        writer=new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
-                        isconnected=true;
-                    }catch (Exception ex){
-                        ex.printStackTrace();
-                        isconnected=false;
-                    }
-//                Toast.makeText(SixDOF.this, "connecting status="+isconnected, Toast.LENGTH_SHORT).show();
-                    show_connection_status(isconnected);
-                }
-            }.start();
-        }
-        public void send(String msg){
-            if(!isconnected){
-                return;
+                try{
+                    Thread.sleep( (int)(1000.0/this.fq) ) ;
+                }catch (Exception ex){}
             }
-
-            new Thread(){
-                public void run(){
-                    try{
-//                    Log.i(TAG, "sending="+msg);
-                        writer.println(msg);
-                        writer.flush();
-                    }catch (Exception ex){
-                        isconnected=false;
-                        show_connection_status(isconnected);
-                        ex.printStackTrace();
-                    }
-                }
-            }.start();
         }
 
         public void close(){
-            try{
-                client.close();
-            }catch (Exception ex){
-
-            }
+            is_alive=false;
         }
-
 
     }
 
-    class WebsocketHandler extends Thread implements WebsocketInterface {
 
-        long last_processed_event_no=0;  //update after sending event_no
-        long event_no;
-        String button;
-        boolean is_pressed;
-
-        int sending_f=1;
-
-        WebSocketServerSingle leader;
-        boolean isalive=false;
-        public void setLeader(WebSocketServerSingle leader){
-            this.leader=leader;
-        }
-
-        public void button_event(long event_no, String button, boolean is_pressed){
-            this.event_no=event_no;
-            this.button=button;
-            this.is_pressed=is_pressed;
-        }
-
-        @Override
-        public void onopen(String remote) {
-            System.out.println("onopen=" + remote);
-            show_connection_status(true);
-        }
-
-
-        @Override
-        public void onmessage(String msg) {
-            System.out.println("onmessage=" + msg);
-            if(msg.startsWith("echo=")){
-                try{
-                    msg=msg.replace("echo=","from server=");
-                    boolean s=ws.send_msg(msg);
-                    System.out.println("sent="+s);
-                }catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-
-        }
-
-
-        public void run(){
-            isalive=true;
-            //send data at a fixed rate
-            long ct=0;
-
-            while(leader.isAlive() && isalive){
-                long st=System.currentTimeMillis();
-                try{
-                    int sleeptime = (int) ( 1000 / (float) setting_fq );
-//                    System.out.println("sleeptime="+sleeptime +" fq="+setting_fq);
-                    Thread.sleep(sleeptime);
-                }catch (Exception ex){}
-                ++ct;
-
-
-                JSONObject jsr = new JSONObject();
-                try {
-                    jsr.put("id", ct);
-                    jsr.put("type", "common");
-                    jsr.put("button", this.button);
-                    jsr.put("pressed", this.is_pressed);
-                    jsr.put("x", sensor_x);
-                    jsr.put("y", sensor_y);
-                    jsr.put("enable_ctrl", cb.isChecked());
-                    jsr.put("enable_gyro", cbg.isChecked());
-                    jsr.put("f", sending_f);
-                    jsr.put("spinner_angle", spinner_angle);
-                    jsr.put("spinner_strength", spinner_strength);
-                    jsr.put("spinner_x", spinner_x);
-                    jsr.put("spinner_y", spinner_y);
-                }catch (Exception ex){
-
-                }
-
-                String resp=jsr.toString();
-
-                try {
-                    ws.send_msg(resp);
-                    last_send_ms = System.currentTimeMillis();
-                }catch (Exception ex){
-                    show_connection_status(false);
-                }
-                long dt=System.currentTimeMillis() -st;
-                sending_f= (int) ( 1000.0f /(float)dt );
-
-
-
-//                System.out.println("wh is alive "+ct);
-
-            }
-
-        }
-        public  void close(){
-            isalive=false;
-        }
-
-        @Override
-        public void onclose() {
-            System.out.println("connection closed");
-            show_connection_status(false);
-        }
-    }
 
 }

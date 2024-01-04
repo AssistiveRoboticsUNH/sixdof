@@ -564,7 +564,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener{
                 try{
                     int sleeptime = (int) ( 1000 / (float) setting_fq );
 //                    System.out.println("sleeptime="+sleeptime +" fq="+setting_fq);
-                    Thread.sleep(sleeptime);
+//                    Thread.sleep(sleeptime);
                 }catch (Exception ex){}
                 ++ct;
 

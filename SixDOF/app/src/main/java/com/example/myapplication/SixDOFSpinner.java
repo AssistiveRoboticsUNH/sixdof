@@ -36,30 +36,12 @@ import android.widget.CompoundButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URISyntaxException;
-
-
 import io.github.controlwear.virtual.joystick.android.JoystickView;
-import mywebsocket.WebSocketServerSingle;
-import mywebsocket.WebsocketInterface;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.WebSocket;
-import okhttp3.WebSocketListener;
-import okio.ByteString;
 import android.media.ExifInterface;
 import android.widget.ToggleButton;
 
 import org.json.JSONObject;
-import org.zeromq.SocketType;
-import org.zeromq.ZContext;
-import org.zeromq.ZMQ;
-
-public class SixDOFSpinner extends AppCompatActivity implements SensorEventListener{
+public class SixDOFSpinner extends AppCompatActivity implements SensorEventListener, ZMQ_Interface{
     SensorManager mSensorManager=null;
     Sensor mAccelerometer;
     Sensor mGyroscope;
@@ -167,8 +149,6 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
     TextView display;
     TextView tv_ip;
 
-    Button  bgripper;
-    Button bup, bdown;
     Button T1,T2;
     ToggleButton toggleButton;
 
@@ -180,7 +160,7 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
     long cnt=0;
 
     int setting_fq=100;
-    ZMQ_Publisher zmq_publisher;
+    ZMQ_Pub  zmq_publisher;
 
 
     @Override
@@ -213,13 +193,8 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mGyroscope = mSensorManager.getDefaultSensor(TYPE_GYROSCOPE);
 
-//        bup=(Button) findViewById(R.id.button2);
-//        bdown=(Button) findViewById(R.id.button3);
-
-
         T1=(Button) findViewById(R.id.button14);
         T2=(Button) findViewById(R.id.button15);
-        bgripper=(Button) findViewById(R.id.button5);
         toggleButton=(ToggleButton) findViewById(R.id.toggleButton);
 
 
@@ -230,16 +205,16 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
         cb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
                   @Override
                   public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
-                      String msg=generateMsg();
-                      sayHello(msg);
+//                      String msg=generateMsg();
+//                      sayHello(msg);
                   }
               }
         );
         cbg.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
                                           @Override
                                           public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
-                                              String msg=generateMsg();
-                                              sayHello(msg);
+//                                              String msg=generateMsg();
+//                                              sayHello(msg);
                                           }
                                       }
         );
@@ -266,8 +241,8 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
                 if(motionEvent.getAction()==MotionEvent.ACTION_DOWN || motionEvent.getAction()==MotionEvent.ACTION_UP) {
                     SixDOFSpinner.this.is_pressed = motionEvent.getAction()==MotionEvent.ACTION_DOWN;
                     SixDOFSpinner.this.button = name;
-                    String msg=generateMsg();
-                    sayHello(msg);
+//                    String msg=generateMsg();
+//                    sayHello(msg);
                 }
                 return false;
             }
@@ -299,8 +274,8 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
                 spinner_x=jv.getNormalizedX();
                 spinner_y=jv.getNormalizedY();;
 
-                String msg=generateMsg();
-                sayHello(msg);
+//                String msg=generateMsg();
+//                sayHello(msg);
             }
         });
 
@@ -340,7 +315,7 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
         new Thread(){
             public void run(){
-                zmq_publisher=new ZMQ_Publisher(setting_fq);
+                zmq_publisher=new ZMQ_Pub(SixDOFSpinner.this, setting_fq);
                 zmq_publisher.start();
             }
         }.start();
@@ -372,13 +347,6 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
     }
 
 
-    public void sayHello(String txt) {
-
-//        String response = txt;
-//        socket.send(response.getBytes(ZMQ.CHARSET), 0);
-    }
-
-
     protected void onResume() {
         super.onResume();
         mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
@@ -392,8 +360,8 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
     @Override
     protected void onDestroy() {
-
         super.onDestroy();
+        zmq_publisher.close();
     }
 
     public void show_txt(final String txt){
@@ -409,22 +377,22 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
     String button="";
     boolean is_pressed;
-    public String generateMsg(){
+    public String generate_zmq_pub_msg(){
         JSONObject jsr = new JSONObject();
         try {
             jsr.put("button", this.button);
             jsr.put("pressed", this.is_pressed);
             jsr.put("x", sensor_x);
             jsr.put("y", sensor_y);
-            jsr.put("enable_ctrl", cb.isChecked());
-            jsr.put("enable_gyro", cbg.isChecked());
+            jsr.put("ctrl", cb.isChecked());
+            jsr.put("gyro", cbg.isChecked());
 //            jsr.put("f", sending_f);
             jsr.put("spinner_angle", spinner_angle);
             jsr.put("spinner_strength", spinner_strength);
             jsr.put("spinner_x", 50-spinner_x);
             jsr.put("spinner_y", 50-spinner_y);
             jsr.put("gripper", gripper_status);
-            jsr.put("rec",toggleButton.getText().toString());
+            jsr.put("rec",toggleButton.getText().toString().contains("ON"));
         }catch (Exception ex){
 
         }
@@ -435,40 +403,5 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
 
         return jsr.toString();
     }
-
-
-    class ZMQ_Publisher extends  Thread{
-
-        int fq=10;
-        boolean is_alive=false;
-        private ZContext context;
-        private ZMQ.Socket socket;
-        public ZMQ_Publisher(int fq){
-            this.fq=fq;
-
-            context = new ZContext();
-            socket = context.createSocket(SocketType.PUB);
-            socket.bind("tcp://*:5555");
-        }
-
-        public void run(){
-            is_alive=true;
-            while (is_alive){
-                String response = generateMsg();
-                socket.send(response.getBytes(ZMQ.CHARSET), 0);
-
-                try{
-                    Thread.sleep( (int)(1000.0/this.fq) ) ;
-                }catch (Exception ex){}
-            }
-        }
-
-        public void close(){
-            is_alive=false;
-        }
-
-    }
-
-
 
 }

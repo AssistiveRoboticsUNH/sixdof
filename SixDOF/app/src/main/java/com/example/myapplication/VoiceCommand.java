@@ -25,16 +25,12 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
-import mywebsocket.WebSocketServerSingle;
-import mywebsocket.WebsocketInterface;
 
 public class VoiceCommand extends AppCompatActivity {
 
     public static final String TAG=VoiceCommand.class.getSimpleName();
-    TextView tv_connection, tv_ip, tv_console;
+    TextView tv_ip, tv_console;
     String localIP;
-    WebSocketServerSingle ws;
-    private final int PORT=8080;
 
     Button button_speech;
 
@@ -44,26 +40,35 @@ public class VoiceCommand extends AppCompatActivity {
 
     boolean listening_button_status=false;
 
+    int setting_fq=50;
+    ZMQ_Pub  zmq_publisher;
+
+    String msg_to_send="";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_voice_command);
 
         tv_ip=(TextView) findViewById(R.id.textView5);
-        tv_connection=(TextView) findViewById(R.id.textView6);
         tv_console=(TextView) findViewById(R.id.textView7);
 
         button_speech=(Button) findViewById(R.id.button13);
         button_speech.setText("start listening");
 
         localIP=getIP();
-        tv_ip.setText("local ip="+localIP+":"+PORT);
-
-        createServer();
+        tv_ip.setText("local ip="+localIP);
 
 
         requestRecordAudioPermission();
         speech_init();
+
+        new Thread(){
+            public void run(){
+                zmq_publisher=new ZMQ_Pub(null, setting_fq);
+//                zmq_publisher.start();
+            }
+        }.start();
     }
 
     void stop_listening() {
@@ -111,16 +116,7 @@ public class VoiceCommand extends AppCompatActivity {
             String spokenText = results.get(0);
             addMsg(spokenText);
 
-
-            String resp=spokenText;
-            try {
-                JSONObject jsr = new JSONObject();
-                jsr.put("type", "voice");
-                jsr.put("data",resp);
-                resp=jsr.toString();
-            }catch(Exception e) {
-            }
-            sendMsg(resp);
+            setMsg(spokenText);
 
         }
         super.onActivityResult(requestCode, resultCode, data);
@@ -150,35 +146,16 @@ public class VoiceCommand extends AppCompatActivity {
     @Override
     protected void onDestroy() {
 
-        if(ws!=null){
-            ws.close();
+        try {
+            zmq_publisher.close();
+        }catch (Exception ex){
+
         }
         stop_listening();
 
         super.onDestroy();
     }
 
-    private void createServer(){
-        try {
-            new Thread() {
-                public void run() {
-                    try {
-                        System.out.println("Local IP="+localIP);
-                        ws = new WebSocketServerSingle(new websocketlistener(), PORT);
-                        ws.start();
-                        System.out.println("websocket started");
-                        showMsg("server created");
-                    }catch(Exception e) {
-                        show_connection_status(false);
-                        e.printStackTrace();
-                        showMsg("server creation failed");
-                    }
-                }
-            }.start();
-        }catch(Exception ex) {
-            ex.printStackTrace();
-        }
-    }
     private String getIP(){
         Context context = this.getApplicationContext();
         WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
@@ -207,63 +184,9 @@ public class VoiceCommand extends AppCompatActivity {
         });
     }
 
-
-    public void show_connection_status(boolean status){
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                tv_connection.setText("connection="+status);
-            }
-        });
+    public void setMsg(String msg){
+        zmq_publisher.publish(msg);
     }
-
-    public void sendMsg(String msg){
-        if(ws!=null){
-            new Thread() {
-                public void run() {
-                    try {
-                        if(ws.isConnected()) {
-                            ws.send_msg(msg);
-                            addMsg("sent="+msg);
-                        }
-                    }catch (Exception ex){
-                        show_connection_status(false);
-                    }
-                }
-            }.start();
-        }
-    }
-
-    class websocketlistener implements WebsocketInterface {
-        @Override
-        public void onopen(String remote) {
-            System.out.println("onopen=" + remote);
-            show_connection_status(true);
-        }
-
-
-        @Override
-        public void onmessage(String msg) {
-            System.out.println("onmessage=" + msg);
-            if(msg.startsWith("echo=")){
-                try{
-                    msg=msg.replace("echo=","from server=");
-                    boolean s=ws.send_msg(msg);
-                    System.out.println("sent="+s);
-                }catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-
-        }
-
-        @Override
-        public void onclose() {
-            System.out.println("connection closed");
-            show_connection_status(false);
-        }
-    }
-
 
     private void requestRecordAudioPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -292,16 +215,7 @@ public class VoiceCommand extends AppCompatActivity {
 
         addMsg(spokenText);
         if(success){
-//            sendMsg(msg);
-            String resp=spokenText;
-            try {
-                JSONObject jsr = new JSONObject();
-                jsr.put("type", "voice");
-                jsr.put("data",resp);
-                resp=jsr.toString();
-            }catch(Exception e) {
-            }
-            sendMsg(resp);
+            setMsg(spokenText);
         }
 
         if(listening_button_status==true) {

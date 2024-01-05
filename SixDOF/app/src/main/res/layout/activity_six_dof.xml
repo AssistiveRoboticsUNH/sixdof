@@ -46,41 +46,27 @@
 
     <CheckBox
         android:id="@+id/checkBox"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="28dp"
+        android:layout_width="141dp"
+        android:layout_height="30dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="116dp"
+        android:layout_marginBottom="16dp"
         android:text="enable ctrl"
         android:textSize="20dp"
-        app:layout_constraintBottom_toBottomOf="@+id/checkBox3"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/checkBox3" />
-
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:text="connection:false"
-        android:textSize="20dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/textView2"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/textView2"
-        android:layout_width="0dp"
-        android:layout_height="61dp"
-        android:layout_marginStart="1dp"
-        android:layout_marginTop="164dp"
-        android:layout_marginEnd="1dp"
-        android:layout_marginBottom="164dp"
+        android:layout_width="413dp"
+        android:layout_height="98dp"
+        android:layout_marginBottom="8dp"
         android:inputType="textMultiLine"
         android:text="TextView"
         android:textSize="18dp"
-        app:layout_constraintBottom_toBottomOf="@+id/button9"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintBottom_toTopOf="@+id/button9"
+        tools:layout_editor_absoluteX="-1dp" />
 
     <Button
         android:id="@+id/button6"
@@ -139,25 +125,23 @@
         android:id="@+id/checkBox3"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="35dp"
-        android:layout_marginEnd="57dp"
+        android:layout_marginTop="116dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="16dp"
         android:text="enable gyro"
         android:textSize="20dp"
+        app:layout_constraintBottom_toTopOf="@+id/textView2"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textView" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/textView3"
-        android:layout_width="0dp"
-        android:layout_height="53dp"
-        android:layout_marginStart="1dp"
-        android:layout_marginEnd="1dp"
+        android:layout_width="194dp"
+        android:layout_height="44dp"
         android:text="local ip=127.0.0.1"
         android:textSize="20dp"
-        app:layout_constraintBottom_toTopOf="@+id/textView"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/textView" />
+        tools:layout_editor_absoluteX="1dp"
+        tools:layout_editor_absoluteY="6dp" />
 
     <Button
         android:id="@+id/button14"
@@ -178,4 +162,16 @@
         app:layout_constraintBottom_toTopOf="@+id/button14"
         app:layout_constraintEnd_toStartOf="@+id/button2"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <ToggleButton
+        android:id="@+id/toggleButton2"
+        android:layout_width="129dp"
+        android:layout_height="48dp"
+        android:text="ToggleButton"
+        android:textOff="Record OFF"
+        android:textOn="Record ON"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.494"
+        app:layout_constraintStart_toEndOf="@+id/textView3"
+        tools:layout_editor_absoluteY="37dp" />
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -306,6 +306,7 @@ public class SixDOF extends AppCompatActivity implements SensorEventListener, ZM
     public String generate_zmq_pub_msg(){
         JSONObject jsr = new JSONObject();
         try {
+            jsr.put("mode", "button");
             jsr.put("button", this.button);
             jsr.put("pressed", this.is_pressed);
             jsr.put("x", sensor_x);

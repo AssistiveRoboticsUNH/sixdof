@@ -3,6 +3,7 @@ package com.example.myapplication;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -72,6 +73,7 @@ public class VoiceCommand extends AppCompatActivity {
     }
 
     void stop_listening() {
+        listening_button_status=false;
         System.out.println("dostop request");
         speech.stopListening();
     }
@@ -156,6 +158,13 @@ public class VoiceCommand extends AppCompatActivity {
         super.onDestroy();
     }
 
+    @Override
+    protected void onPause() {
+        stop_listening();
+        super.onPause();
+    }
+
+
     private String getIP(){
         Context context = this.getApplicationContext();
         WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
@@ -185,6 +194,13 @@ public class VoiceCommand extends AppCompatActivity {
     }
 
     public void setMsg(String msg){
+        JSONObject jsr = new JSONObject();
+        try {
+            jsr.put("mode", "voice");
+            jsr.put("speech", msg);
+            msg=jsr.toString();
+        }catch (Exception ex){}
+
         zmq_publisher.publish(msg);
     }
 

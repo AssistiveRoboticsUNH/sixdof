@@ -380,6 +380,7 @@ public class SixDOFSpinner extends AppCompatActivity implements SensorEventListe
     public String generate_zmq_pub_msg(){
         JSONObject jsr = new JSONObject();
         try {
+            jsr.put("mode", "spinner");
             jsr.put("button", this.button);
             jsr.put("pressed", this.is_pressed);
             jsr.put("x", sensor_x);

@@ -77,7 +77,7 @@
         android:layout_height="0dp"
         android:layout_marginBottom="22dp"
         android:onClick="button_voice_clicked"
-        android:text="Voice Command Server"
+        android:text="Voice Command Interface"
         app:layout_constraintBottom_toTopOf="@+id/editTextText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.574"
@@ -103,7 +103,7 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="118dp"
         android:layout_marginBottom="57dp"
-        android:text=" CARL v3.0"
+        android:text=" CARL v3.1"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/editTextText" />
